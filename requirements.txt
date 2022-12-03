@@ -1,0 +1,10 @@
+aws-lambda-typing
+aws-sam-cli-local
+black
+flake8
+isort
+mypy
+pytest
+pytest-cov
+requests
+types-requests

@@ -6,19 +6,13 @@
   "editor.tabSize": 2,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "editor.formatOnSave": true,
+  "isort.args": ["--fss", "--line-length", "80", "--profile", "black"],
   "prettier.arrowParens": "avoid",
   "python.formatting.blackArgs": ["--line-length", "80"],
   "python.formatting.provider": "black",
   "python.linting.flake8Args": ["--max-line-length", "80"],
   "python.linting.flake8Enabled": true,
   "python.linting.mypyEnabled": true,
-  "python.linting.mypyArgs": ["--strict"],
-  "python.linting.pylintEnabled": false,
-  "python.sortImports.args": [
-    "--fss",
-    "--line-length",
-    "80",
-    "--profile",
-    "black"
-  ]
+  "python.linting.mypyArgs": ["--strict", "--ignore-missing-imports"],
+  "python.linting.pylintEnabled": false
 }

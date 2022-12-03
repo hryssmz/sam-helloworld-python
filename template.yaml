@@ -1,39 +1,159 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: Sample SAM App
+
+Parameters:
+  ApigwEndpoint:
+    Type: String
+    Description: Endpoint for local API Gateway access by end user
+    Default: ""
+
+  EnvironmentType:
+    Type: String
+    Description: API Gateway deployment stage
+    Default: dev
+    AllowedValues: [dev, prod, sam]
+
+  Endpoint:
+    Type: String
+    Description: Endpoint for local AWS resource access within app
+    Default: ""
+
+Conditions:
+  IsLocal:
+    Fn::Not:
+      - Fn::Equals:
+          - Ref: Endpoint
+          - ""
+
+  IsSam:
+    Fn::Equals:
+      - Ref: EnvironmentType
+      - sam
+
+  LayerSupported:
+    Fn::Or:
+      - Fn::Not:
+          - Condition: IsLocal
+      - Condition: IsSam
+
 Globals:
   Function:
     Handler: app.handler
     Runtime: python3.9
-    Timeout: 180
+    Timeout: 10
+    Environment:
+      Variables:
+        ENDPOINT:
+          Ref: Endpoint
     Architectures:
       - x86_64
 
 Resources:
+  # REST API
   HelloWorldApi:
     Type: AWS::Serverless::Api
     Properties:
       Description: Hello World REST API
-      Name: hello-world-api
-      StageName: test
+      Name:
+        Fn::If:
+          - IsLocal
+          - HelloWorldApi
+          - Ref: AWS::NoValue
+      StageName:
+        Ref: EnvironmentType
 
+  # Lambda functions (REST API)
   HelloWorldFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/functions/hello_world/
+      CodeUri: functions/hello_world
+      Description: Hello World function
       Events:
-        HelloWorldApiEvent:
+        ApiEvent:
           Type: Api
           Properties:
-            Path: /hello
-            Method: get
+            Method: GET
+            Path: /
             RestApiId:
               Ref: HelloWorldApi
+      FunctionName:
+        Fn::If:
+          - IsLocal
+          - HelloWorldFunction
+          - Ref: AWS::NoValue
+
+  HelloModulePackageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/hello_module_package
+      Description: A simple function uses modules and packages
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Method: GET
+            Path: /module
+            RestApiId:
+              Ref: HelloWorldApi
+      FunctionName:
+        Fn::If:
+          - IsLocal
+          - HelloModulePackageFunction
+          - Ref: AWS::NoValue
+
+  HelloLayerFunction:
+    Type: AWS::Serverless::Function
+    Condition: LayerSupported
+    Properties:
+      CodeUri: functions/hello_layer
+      Description: A simple function uses layers
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Method: GET
+            Path: /layer
+            RestApiId:
+              Ref: HelloWorldApi
+      Layers:
+        - Ref: PipLayer
+        - Ref: HelloWorldLayer
+      FunctionName:
+        Fn::If:
+          - IsLocal
+          - HelloLayerFunction
+          - Ref: AWS::NoValue
+
+  # Lambda Layers
+  PipLayer:
+    Type: AWS::Serverless::LayerVersion
+    Condition: LayerSupported
+    Properties:
+      ContentUri: layers/pip
+      CompatibleArchitectures:
+        - x86_64
+      CompatibleRuntimes:
+        - python3.9
+    Metadata:
+      BuildMethod: python3.9
+
+  HelloWorldLayer:
+    Type: AWS::Serverless::LayerVersion
+    Condition: LayerSupported
+    Properties:
+      ContentUri: layers/hello_world
+      CompatibleArchitectures:
+        - x86_64
+      CompatibleRuntimes:
+        - python3.9
+    Metadata:
+      BuildMethod: python3.9
 
 Outputs:
   HelloWorldApi:
-    Value: !Sub "https://${HelloWorldApi}.execute-api.${AWS::Region}.amazonaws.com/test/hello/"
-  HelloWorldFunction:
-    Value: !GetAtt HelloWorldFunction.Arn
-  HelloWorldFunctionIamRole:
-    Value: !GetAtt HelloWorldFunctionRole.Arn
+    Value:
+      Fn::If:
+        - IsLocal
+        - Fn::Sub: ${ApigwEndpoint}/restapis/${HelloWorldApi}/${HelloWorldApi.Stage}/_user_request_/
+        - Fn::Sub: https://${HelloWorldApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${HelloWorldApi.Stage}/
